@@ -1,56 +1,47 @@
 WsusDashboard 📊
-O WsusDashboard é uma ferramenta client-side leve e moderna para a visualização e análise de relatórios de atualização do Windows Server Update Services (WSUS). Ela permite consolidar múltiplos arquivos (CSV ou Excel) em um painel interativo inspirado no design do Microsoft Azure.
+O WsusDashboard é uma ferramenta client-side leve e moderna, desenvolvida especificamente para facilitar o processo de auditoria de segurança mensal em ambientes de TI complexos.
 
-🚀 Funcionalidades
-Consolidação Multiarquivo: Suporte para carregar até 15 arquivos simultaneamente, unificando os dados em um único dashboard.
+🛡️ Contexto de Auditoria
+Esta aplicação nasceu da necessidade crítica de consolidar relatórios de conformidade de 7 servidores WSUS distribuídos no ambiente.
 
-Compatibilidade Inteligente:
+Frequência Mensal: O dashboard é utilizado para gerar a visão consolidada exigida pelas auditorias de segurança, garantindo que o status de atualização de todo o parque tecnológico seja transparente e auditável.
+
+Visão Centralizada: Permite que o administrador de sistemas apresente o estado de saúde das atualizações de múltiplos servidores em uma única interface, economizando horas de compilação manual de dados.
+
+🚀 Funcionalidades Principais
+Consolidação em Lote: Suporte para carregar até 15 arquivos simultaneamente (ideal para cobrir os 7 servidores WSUS e redundâncias).
+
+Compatibilidade de Formatos:
 
 Lê arquivos .csv, .xls e .xlsx.
 
 Algoritmo de busca automática por colunas (Computer Name, Status, Approval).
 
-Suporte específico para extração automática da aba Sheet3 (padrão de exportação de alguns sistemas de automação).
+Extração inteligente da aba Sheet3 (padrão de exportação via automação/Apps Script).
 
-Visualização de Dados:
+Visualização de Conformidade (Compliance):
 
-Cards de resumo com total de máquinas e pendências.
+Cards de resumo com total de máquinas e dispositivos com pendências.
 
-Gráfico de barras horizontais dinâmico (via Chart.js) para distribuição de status.
+Gráfico dinâmico de distribuição de status via Chart.js.
 
-Alerta crítico visual quando há máquinas com status diferente de "Installed".
-
-Foco em Resolução: Tabela detalhada listando apenas as máquinas que exigem atenção (Not Installed, Pending Reboot, etc.).
-
-Privacidade Total: O processamento é feito 100% no navegador. Nenhum dado é enviado para servidores externos.
+Alerta Crítico: Destaque visual imediato para máquinas com status diferente de "Installed", facilitando a remediação pré-auditoria.
 
 🛠️ Tecnologias Utilizadas
 Frontend: HTML5, CSS3 (Fluent Design / Azure UI), JavaScript (ES6+).
 
-Gráficos: Chart.js para visualização de dados.
+Visualização: Chart.js para gráficos interativos.
 
-Parsing de Dados: * PapaParse para processamento de CSV.
+Processamento de Dados: * PapaParse para CSV.
 
-SheetJS (XLSX) para leitura de planilhas Excel.
+SheetJS (XLSX) para planilhas Excel.
 
 📂 Como Utilizar
-Exportação: Exporte o relatório de status de máquinas do seu console WSUS ou via PowerShell/Apps Script em formato CSV ou Excel.
+Exportação: Gere os relatórios de status dos seus 7 servidores WSUS.
 
-Upload: Abra o WsusDashboard.html em qualquer navegador moderno e selecione os arquivos desejados.
+Upload: Selecione todos os arquivos no botão de carregamento do WsusDashboard.html.
 
-Análise: * Confira o gráfico para identificar gargalos de atualização.
+Apresentação: Utilize os gráficos e a tabela de pendências para demonstrar o nível de conformidade do ambiente na auditoria.
 
-Utilize a tabela de pendências para identificar quais máquinas precisam de intervenção manual ou reinicialização.
-
-🏗️ Estrutura do Projeto
-O projeto é entregue em um arquivo único (Single Page Application), facilitando a portabilidade em ambientes de TI restritos:
-
-Plaintext
-WsusDashboard.html  # Contém toda a lógica, estilos e estrutura.
-✒️ Autor
-Desenvolvido por um profissional de Systems Administration & IT focado em automação e monitoramento de infraestrutura de alto desempenho.
-
-Dicas para o seu Repositório:
-Screenshots: Tire um print do dashboard funcionando com dados fictícios e adicione ao repositório.
-
-GitHub Pages: Como o projeto é estático (HTML/JS), você pode ativar o GitHub Pages nas configurações para ter uma URL funcional do seu dashboard online.
+🔒 Segurança e Privacidade
+Como o processamento é feito 100% no lado do cliente (browser), os dados sensíveis dos servidores e nomes de máquinas nunca saem da sua rede local ou estação de trabalho, atendendo aos requisitos de sigilo da auditoria de segurança.
