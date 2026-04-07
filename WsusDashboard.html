@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WsusDashboard</title>
+  <!-- Chart.js: gráficos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- PapaParse: leitura de CSV no navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS (xlsx): leitura opcional de Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    /* Paleta inspirada em Fluent Design / Azure Portal (tema claro) */
+    :root {
+      --ms-bg-page: #f3f2f1;
+      --ms-bg-white: #ffffff;
+      --ms-border: #edebe9;
+      --ms-border-strong: #c8c6c4;
+      --ms-text: #323130;
+      --ms-text-secondary: #605e5c;
+      --ms-blue: #0078d4;
+      --ms-blue-hover: #106ebe;
+      --ms-blue-light: #deecf9;
+      --ms-success: #107c10;
+      --ms-error: #a4262c;
+      --ms-error-bg: #fde7e9;
+      --ms-warning-text: #8a6116;
+      --ms-warning-bg: #fff4ce;
+      --ms-elev-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.12), 0 1.6px 3.6px rgba(0, 0, 0, 0.08);
+      --ms-elev-4: 0 0.6px 1.8px rgba(0, 0, 0, 0.12), 0 3.2px 7.2px rgba(0, 0, 0, 0.13);
+      --radius: 4px;
+      --radius-lg: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+      background: var(--ms-bg-page);
+      color: var(--ms-text);
+      line-height: 1.5;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+    .azure-shell { min-height: 100vh; display: flex; flex-direction: column; }
+    /* Faixa superior estilo portal Azure */
+    .azure-topbar {
+      height: 48px;
+      background: var(--ms-blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding: 0 1rem;
+      box-shadow: var(--ms-elev-2);
+    }
+    .azure-topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+    .azure-topbar-brand svg { flex-shrink: 0; opacity: 0.95; }
+    .azure-topbar-title { font-weight: 400; opacity: 0.92; margin-left: 0.25rem; }
+    .azure-page { flex: 1; padding-bottom: 2rem; }
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem;
+    }
+    /* Cabeçalho da página (breadcrumb + título) */
+    .page-header {
+      margin-bottom: 1.25rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--ms-border);
+    }
+    .breadcrumb {
+      font-size: 12px;
+      color: var(--ms-text-secondary);
+      margin-bottom: 0.35rem;
+    }
+    .breadcrumb span { color: var(--ms-blue); }
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--ms-text);
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      color: var(--ms-text-secondary);
+      font-size: 13px;
+      margin-top: 0.5rem;
+      max-width: 720px;
+    }
+    .sub strong { color: var(--ms-text); font-weight: 600; }
+    /* Cartão / painel base Fluent */
+    .upload-zone {
+      border: 1px dashed var(--ms-border-strong);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      background: var(--ms-bg-white);
+      margin-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: var(--ms-elev-2);
+    }
+    .upload-zone label.btn { cursor: pointer; display: inline-block; }
+    input[type="file"] {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+    }
+    .btn {
+      background: var(--ms-blue);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      min-height: 32px;
+      box-shadow: var(--ms-elev-2);
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: var(--ms-blue-hover); }
+    .btn:active { transform: scale(0.98); }
+    .btn:focus-visible {
+      outline: 2px solid var(--ms-text);
+      outline-offset: 2px;
+    }
+    .file-hint {
+      color: var(--ms-text-secondary);
+      font-size: 13px;
+      flex: 1;
+      min-width: 200px;
+    }
+    .file-hint strong { color: var(--ms-text); }
+    /* MessageBar estilo Fluent (severidade) */
+    .alert-not-installed {
+      display: none;
+      background: var(--ms-error-bg);
+      border: 1px solid #f1aeb5;
+      border-left: 4px solid var(--ms-error);
+      color: var(--ms-text);
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      margin-bottom: 1rem;
+      align-items: flex-start;
+      gap: 10px;
+      box-shadow: var(--ms-elev-2);
+    }
+    .alert-not-installed.visible { display: flex; }
+    .alert-not-installed .alert-icon {
+      color: var(--ms-error);
+      font-size: 18px;
+      line-height: 1.2;
+      flex-shrink: 0;
+    }
+    .alert-not-installed strong { color: var(--ms-text); }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .card {
+      background: var(--ms-bg-white);
+      border: 1px solid var(--ms-border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--ms-elev-2);
+      transition: box-shadow 0.15s ease;
+    }
+    .card:hover { box-shadow: var(--ms-elev-4); }
+    .card .label {
+      font-size: 11px;
+      color: var(--ms-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+    .card .value {
+      font-size: 32px;
+      font-weight: 600;
+      margin-top: 6px;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+    .card.total .value { color: var(--ms-text); }
+    .card.ok .value { color: var(--ms-success); }
+    .card.bad .value { color: var(--ms-error); }
+    .grid-chart {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    @media (min-width: 900px) {
+      .grid-chart { grid-template-columns: 1.1fr 0.9fr; align-items: start; }
+    }
+    .panel {
+      background: var(--ms-bg-white);
+      border: 1px solid var(--ms-border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: var(--ms-elev-2);
+    }
+    .panel h2 {
+      font-size: 16px;
+      margin: 0 0 14px 0;
+      font-weight: 600;
+      color: var(--ms-text);
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--ms-border);
+    }
+    .chart-wrap {
+      position: relative;
+      min-height: 200px;
+      height: 300px;
+      max-width: 100%;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--ms-border);
+      background: var(--ms-bg-white);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--ms-border);
+    }
+    th {
+      background: #faf9f8;
+      color: var(--ms-text-secondary);
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td { color: var(--ms-text); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--ms-blue-light); }
+    .empty-state {
+      color: var(--ms-text-secondary);
+      padding: 2rem;
+      text-align: center;
+      font-size: 13px;
+    }
+    .attention-breakdown {
+      font-size: 13px;
+      color: var(--ms-text-secondary);
+      margin: 0 0 12px 0;
+      line-height: 1.5;
+    }
+    .attention-breakdown strong { color: var(--ms-text); }
+    .status-pill {
+      display: inline-block;
+      margin: 3px 6px 3px 0;
+      padding: 4px 10px;
+      border-radius: 2px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #f3f2f1;
+      border: 1px solid var(--ms-border);
+      color: var(--ms-text);
+    }
+    .error-msg {
+      color: var(--ms-error);
+      font-size: 13px;
+      margin-top: 0.5rem;
+      padding: 10px 12px;
+      background: var(--ms-error-bg);
+      border-radius: var(--radius);
+      border-left: 4px solid var(--ms-error);
+    }
+    .error-msg.warning {
+      color: var(--ms-warning-text);
+      background: var(--ms-warning-bg);
+      border-left-color: #f2c811;
+    }
+    #batchStatus {
+      font-size: 13px;
+      color: var(--ms-text-secondary);
+      margin-top: 0.25rem;
+      padding: 8px 12px;
+      background: var(--ms-blue-light);
+      border-radius: var(--radius);
+      border: 1px solid #c7e0f4;
+    }
+  </style>
+</head>
+<body>
+  <div class="azure-shell">
+    <header class="azure-topbar" role="banner">
+      <div class="azure-topbar-brand">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="9" height="9" rx="1.5" fill="#fff"/>
+          <rect x="13" y="2" width="9" height="9" rx="1.5" fill="#fff" opacity=".88"/>
+          <rect x="2" y="13" width="9" height="9" rx="1.5" fill="#fff" opacity=".88"/>
+          <rect x="13" y="13" width="9" height="9" rx="1.5" fill="#fff" opacity=".76"/>
+        </svg>
+        <span>WsusDashboard</span>
+        <span class="azure-topbar-title">| Local</span>
+      </div>
+    </header>
+    <main class="azure-page">
+  <div class="wrap">
+    <div class="page-header">
+      <div class="breadcrumb">Início <span aria-hidden="true">›</span> <span>WsusDashboard</span> <span aria-hidden="true">›</span> Status de máquinas</div>
+      <h1>Status de atualizações</h1>
+      <p class="sub">Carregue até <strong>15</strong> arquivos por vez: <strong>.xls</strong> ou <strong>.xlsx</strong> (lidos no navegador com a biblioteca SheetJS — usa automaticamente a aba <strong>Sheet3</strong> quando existir) ou <strong>.csv</strong>. Compatível com o fluxo do seu Apps Script.</p>
+    </div>
+
+    <!-- Seleção múltipla: até 15 arquivos consolidados em um único dashboard -->
+    <div class="upload-zone">
+      <label class="btn" for="fileInput">Carregar CSV / Excel</label>
+      <input id="fileInput" type="file" multiple accept=".csv,.txt,.xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+      <span class="file-hint">Excel <strong>.xls / .xlsx</strong>: extrai a aba <strong>Sheet3</strong> (nome sem diferenciar maiúsculas). Se não houver Sheet3, usa a 1ª aba e avisa. <strong>CSV</strong> também. Até 15 arquivos. Colunas: Computer Name, Approval, Status.</span>
+    </div>
+    <p id="batchStatus" style="display:none;"></p>
+    <p id="parseError" class="error-msg" style="display:none;"></p>
+
+    <!-- Destaque vermelho se existir máquina com qualquer status diferente de Installed -->
+    <div id="alertNotInstalled" class="alert-not-installed" role="alert">
+      <span class="alert-icon" aria-hidden="true">⚠</span>
+      <span id="alertNotInstalledText"><strong>Atenção:</strong> há máquinas pendentes (status diferente de Installed). Veja a tabela abaixo.</span>
+    </div>
+
+    <!-- Cards: total, instaladas, não instaladas -->
+    <div class="cards">
+      <div class="card total">
+        <div class="label">Total de máquinas</div>
+        <div class="value" id="cardTotal">—</div>
+      </div>
+      <div class="card ok">
+        <div class="label">Atualizadas (Installed)</div>
+        <div class="value" id="cardInstalled">—</div>
+      </div>
+      <div class="card bad">
+        <div class="label">Com pendência (≠ Installed)</div>
+        <div class="value" id="cardAttention">—</div>
+      </div>
+    </div>
+
+    <div class="grid-chart">
+      <div class="panel">
+        <h2>Distribuição por status</h2>
+        <div class="chart-wrap" id="statusChartWrap">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Resumo</h2>
+        <p class="sub" id="summaryText" style="margin-top:0;">
+          Carregue um arquivo para ver os números. A tabela abaixo lista todas as máquinas cujo status não é Installed.
+        </p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Máquinas com status diferente de &quot;Installed&quot;</h2>
+      <p class="sub" style="margin:0 0 0.5rem 0;">
+        Inclui <strong>Not Installed</strong>, <strong>Pending Reboot</strong>, aguardando <strong>download</strong> e qualquer outro valor de status que não seja concluído como instalado.
+      </p>
+      <p id="attentionBreakdown" class="attention-breakdown" style="display:none;"></p>
+      <div id="tableContainer" class="table-wrap">
+        <p class="empty-state">Nenhum dado carregado ou todas as máquinas estão com status Installed.</p>
+      </div>
+    </div>
+  </div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      /** Referência ao gráfico Chart.js (recriado a cada novo arquivo) */
+      let chartInstance = null;
+
+      /** Normaliza string para comparação (trim + lowercase) */
+      function norm(s) {
+        return String(s == null ? '' : s).trim().toLowerCase();
+      }
+
+      /** Verifica se a célula parece o cabeçalho "nome do computador" */
+      function cellIsComputerHeader(cell) {
+        const n = norm(cell);
+        if (!n) return false;
+        var exact = ['computer name', 'computername', 'hostname', 'machine', 'device name', 'host',
+          'nome do computador', 'computador'];
+        for (var i = 0; i < exact.length; i++) {
+          if (n === exact[i]) return true;
+        }
+        if (n.indexOf('computer') !== -1 && n.indexOf('name') !== -1) return true;
+        return false;
+      }
+
+      /** Verifica se a célula parece o cabeçalho de status */
+      function cellIsStatusHeader(cell) {
+        const n = norm(cell);
+        return n === 'status' || n === 'state' || n === 'estado' || n === 'installation status';
+      }
+
+      /** Verifica se a célula parece Approval */
+      function cellIsApprovalHeader(cell) {
+        const n = norm(cell);
+        return n === 'approval' || n === 'aprovação' || n === 'aprovacao';
+      }
+
+      /**
+       * Planilhas exportadas do Excel costumam ter linhas de título e colunas vazias à esquerda.
+       * Procura nas primeiras linhas uma linha que contenha ao menos uma célula "Computer Name" e outra "Status".
+       * Retorna índices de coluna (0-based) e o texto exibido no cabeçalho.
+       */
+      function findHeaderRowAndColumns(matrix, maxScanRows) {
+        var limit = Math.min(maxScanRows || 80, matrix.length);
+        for (var r = 0; r < limit; r++) {
+          var row = matrix[r];
+          if (!row || !row.length) continue;
+          var idxComputer = -1;
+          var idxStatus = -1;
+          var idxApproval = -1;
+          for (var c = 0; c < row.length; c++) {
+            var cell = row[c];
+            if (idxComputer < 0 && cellIsComputerHeader(cell)) idxComputer = c;
+            if (idxStatus < 0 && cellIsStatusHeader(cell)) idxStatus = c;
+            if (idxApproval < 0 && cellIsApprovalHeader(cell)) idxApproval = c;
+          }
+          if (idxComputer >= 0 && idxStatus >= 0) {
+            return {
+              headerRowIndex: r,
+              idxComputer: idxComputer,
+              idxStatus: idxStatus,
+              idxApproval: idxApproval,
+              labelComputer: String(row[idxComputer] == null ? '' : row[idxComputer]).trim() || 'Computer Name',
+              labelStatus: String(row[idxStatus] == null ? '' : row[idxStatus]).trim() || 'Status',
+              labelApproval: idxApproval >= 0 ? String(row[idxApproval] == null ? '' : row[idxApproval]).trim() || 'Approval' : null
+            };
+          }
+        }
+        return null;
+      }
+
+      /** Linha em branco (todas as células vazias) */
+      function isRowEmpty(row) {
+        if (!row || !row.length) return true;
+        for (var i = 0; i < row.length; i++) {
+          if (String(row[i] == null ? '' : row[i]).trim() !== '') return false;
+        }
+        return true;
+      }
+
+      /** Monta linhas a partir da matriz; sourceFile identifica o CSV de origem na consolidação. */
+      function rowsFromMatrixByIndices(matrix, startRow, idxComputer, idxStatus, idxApproval, sourceFile) {
+        var src = sourceFile == null ? '' : String(sourceFile);
+        var rows = [];
+        for (var i = startRow; i < matrix.length; i++) {
+          var row = matrix[i];
+          if (isRowEmpty(row)) continue;
+          var computer = row[idxComputer];
+          var status = row[idxStatus];
+          var approval = idxApproval >= 0 ? row[idxApproval] : '';
+          var compStr = String(computer == null ? '' : computer).trim();
+          var stStr = String(status == null ? '' : status).trim();
+          if (!compStr && !stStr) continue;
+          if (cellIsComputerHeader(compStr) && cellIsStatusHeader(stStr)) continue;
+          rows.push({ computer: computer, approval: approval, status: status, sourceFile: src });
+        }
+        return rows;
+      }
+
+      /** Limite de arquivos por lote (15 CSV conforme seu cenário). */
+      var MAX_FILES = 15;
+
+      /** Considera "concluído" apenas quando o status é Installed (comparação sem diferenciar maiúsculas). */
+      function isInstalledStatus(st) {
+        return norm(st) === norm('Installed');
+      }
+
+      /**
+       * Conta todos os status para o gráfico, separa máquinas com qualquer status ≠ Installed para a tabela.
+       */
+      function aggregate(rows) {
+        const byStatus = {};
+        const attentionList = [];
+        let installed = 0;
+        let notInstalledStrict = 0;
+
+        rows.forEach(function (r) {
+          const st = String(r.status == null ? '' : r.status).trim();
+          const stKey = st || '(vazio)';
+          byStatus[stKey] = (byStatus[stKey] || 0) + 1;
+
+          if (isInstalledStatus(st)) {
+            installed++;
+          } else {
+            attentionList.push(r);
+            if (norm(st) === norm('Not Installed')) {
+              notInstalledStrict++;
+            }
+          }
+        });
+
+        const attentionByStatus = {};
+        attentionList.forEach(function (r) {
+          const k = String(r.status == null ? '' : r.status).trim() || '(vazio)';
+          attentionByStatus[k] = (attentionByStatus[k] || 0) + 1;
+        });
+
+        return {
+          byStatus: byStatus,
+          attentionList: attentionList,
+          attentionByStatus: attentionByStatus,
+          installed: installed,
+          notInstalledStrict: notInstalledStrict,
+          total: rows.length
+        };
+      }
+
+      /** Ordena pares [status, count] por quantidade (maior primeiro), depois nome do status. */
+      function sortAttentionEntries(attentionByStatus) {
+        const entries = [];
+        for (const k in attentionByStatus) {
+          if (Object.prototype.hasOwnProperty.call(attentionByStatus, k)) {
+            entries.push([k, attentionByStatus[k]]);
+          }
+        }
+        entries.sort(function (a, b) {
+          if (b[1] !== a[1]) return b[1] - a[1];
+          return String(a[0]).localeCompare(String(b[0]), 'pt-BR');
+        });
+        return entries;
+      }
+
+      /** Atualiza cards, alerta e resumo; batchInfo descreve consolidação de vários arquivos. */
+      function updateCards(agg, batchInfo) {
+        batchInfo = batchInfo || {};
+        document.getElementById('cardTotal').textContent = agg.total;
+        document.getElementById('cardInstalled').textContent = agg.installed;
+        document.getElementById('cardAttention').textContent = agg.attentionList.length;
+
+        const alertEl = document.getElementById('alertNotInstalled');
+        const nAtt = agg.attentionList.length;
+        if (nAtt > 0) {
+          alertEl.classList.add('visible');
+          const parts = sortAttentionEntries(agg.attentionByStatus).map(function (e) {
+            return e[1] + ' com &quot;' + escapeHtml(e[0]) + '&quot;';
+          });
+          const alertInner = document.getElementById('alertNotInstalledText');
+          alertInner.innerHTML =
+            '<strong>Atenção:</strong> ' + nAtt + ' máquina(s) com status diferente de <strong>Installed</strong> ' +
+            '(ex.: Not Installed, Pending Reboot, download pendente). ' +
+            (parts.length ? 'Detalhe: ' + parts.join('; ') + '.' : '') +
+            ' Veja a tabela abaixo.';
+        } else {
+          alertEl.classList.remove('visible');
+        }
+
+        const entries = sortAttentionEntries(agg.attentionByStatus);
+        let summary = '';
+        if (batchInfo.fileCount > 1) {
+          summary =
+            '<strong>' + batchInfo.fileCount + ' arquivos</strong> consolidados · ';
+        }
+        summary += 'Total: ' + agg.total + ' linhas. <strong>Installed:</strong> ' + agg.installed + '.';
+        if (nAtt > 0) {
+          summary +=
+            ' <strong>Com pendência:</strong> ' + nAtt +
+            (agg.notInstalledStrict ? ' (sendo ' + agg.notInstalledStrict + ' &quot;Not Installed&quot;).' : '.');
+          summary += ' Tipos: ';
+          summary += entries
+            .map(function (e) {
+              return escapeHtml(e[0]) + ': ' + e[1];
+            })
+            .join(' · ');
+          summary += '.';
+        } else {
+          summary += ' Todas as linhas aparecem como Installed.';
+        }
+        document.getElementById('summaryText').innerHTML = summary;
+      }
+
+      /** Gráfico de barras horizontais (melhor com poucos ou muitos status do que pizza). */
+      function updateChart(byStatus) {
+        const pairs = Object.keys(byStatus).map(function (k) {
+          return { label: k, value: byStatus[k] };
+        });
+        pairs.sort(function (a, b) {
+          return b.value - a.value;
+        });
+        const labels = pairs.map(function (p) { return p.label; });
+        const data = pairs.map(function (p) { return p.value; });
+
+        const colors = [
+          '#0078d4', '#107c10', '#d83b01', '#8764b8', '#00bcf2',
+          '#e81123', '#ffb900', '#5c2e91', '#038387', '#ca5010'
+        ];
+
+        var wrap = document.getElementById('statusChartWrap');
+        if (wrap) {
+          wrap.style.height = Math.max(200, labels.length * 40 + 56) + 'px';
+        }
+
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+        chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Máquinas',
+              data: data,
+              backgroundColor: labels.map(function (_, i) {
+                return colors[i % colors.length];
+              }),
+              borderColor: labels.map(function (_, i) {
+                return colors[i % colors.length];
+              }),
+              borderWidth: 1,
+              borderRadius: 4,
+              maxBarThickness: 32
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: function (items) {
+                    return items.length ? String(items[0].label) : '';
+                  },
+                  label: function (ctx) {
+                    return ' Quantidade: ' + ctx.raw;
+                  }
+                },
+                bodyFont: { family: "'Segoe UI', sans-serif", size: 13 },
+                titleFont: { family: "'Segoe UI', sans-serif", size: 13, weight: '600' },
+                backgroundColor: 'rgba(255,255,255,0.98)',
+                titleColor: '#323130',
+                bodyColor: '#323130',
+                borderColor: '#edebe9',
+                borderWidth: 1,
+                padding: 10,
+                displayColors: true
+              }
+            },
+            scales: {
+              x: {
+                beginAtZero: true,
+                ticks: {
+                  color: '#605e5c',
+                  font: { family: "'Segoe UI', sans-serif", size: 12 }
+                },
+                grid: { color: '#edebe9' },
+                border: { display: false }
+              },
+              y: {
+                ticks: {
+                  color: '#323130',
+                  font: { family: "'Segoe UI', sans-serif", size: 12 },
+                  autoSkip: false
+                },
+                grid: { display: false },
+                border: { display: false }
+              }
+            }
+          }
+        });
+      }
+
+      /**
+       * Tabela: todas as máquinas cujo status não é Installed (Not Installed, Pending Reboot, Download, etc.).
+       * Mostra resumo por status acima da tabela; linhas ordenadas por status e nome do computador.
+       */
+      function renderAttentionTable(list, attentionByStatus, computerColLabel, approvalColLabel, statusColLabel, showSourceColumn) {
+        const container = document.getElementById('tableContainer');
+        const breakdownEl = document.getElementById('attentionBreakdown');
+
+        if (!list.length) {
+          breakdownEl.style.display = 'none';
+          breakdownEl.textContent = '';
+          container.innerHTML =
+            '<p class="empty-state">Todas as máquinas estão com status &quot;Installed&quot; — nada a listar aqui.</p>';
+          return;
+        }
+
+        const entries = sortAttentionEntries(attentionByStatus);
+        let breakdownHtml = showSourceColumn
+          ? '<strong>Neste conjunto de arquivos, pendências por status:</strong> '
+          : '<strong>Neste arquivo, pendências por status:</strong> ';
+        breakdownHtml += entries
+          .map(function (e) {
+            return '<span class="status-pill">' + escapeHtml(e[0]) + ': ' + e[1] + '</span>';
+          })
+          .join(' ');
+        breakdownEl.innerHTML = breakdownHtml;
+        breakdownEl.style.display = 'block';
+
+        const sorted = list.slice().sort(function (a, b) {
+          if (showSourceColumn) {
+            const fa = String(a.sourceFile || '');
+            const fb = String(b.sourceFile || '');
+            const fc = fa.localeCompare(fb, 'pt-BR', { sensitivity: 'base' });
+            if (fc !== 0) return fc;
+          }
+          const sa = String(a.status == null ? '' : a.status).trim() || '(vazio)';
+          const sb = String(b.status == null ? '' : b.status).trim() || '(vazio)';
+          const cmp = sa.localeCompare(sb, 'pt-BR', { sensitivity: 'base' });
+          if (cmp !== 0) return cmp;
+          return String(a.computer).localeCompare(String(b.computer), 'pt-BR', { sensitivity: 'base' });
+        });
+
+        let html = '<table><thead><tr>';
+        if (showSourceColumn) {
+          html += '<th>Arquivo</th>';
+        }
+        html += '<th>' + escapeHtml(computerColLabel || 'Computer Name') + '</th>';
+        html += '<th>' + escapeHtml(approvalColLabel || 'Approval') + '</th>';
+        html += '<th>' + escapeHtml(statusColLabel || 'Status') + '</th>';
+        html += '</tr></thead><tbody>';
+        sorted.forEach(function (r) {
+          html += '<tr>';
+          if (showSourceColumn) {
+            html += '<td>' + escapeHtml(String(r.sourceFile || '—')) + '</td>';
+          }
+          html += '<td>' + escapeHtml(String(r.computer)) + '</td>';
+          html += '<td>' + escapeHtml(String(r.approval)) + '</td>';
+          html += '<td>' + escapeHtml(String(r.status)) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      /**
+       * Extrai linhas de uma matriz (um CSV/aba Excel). Retorna { rows, found } ou { error }.
+       */
+      function extractDataFromMatrix(matrix, sourceFileName) {
+        if (!matrix || matrix.length < 2) {
+          return { error: 'Arquivo vazio ou sem linhas de dados.' };
+        }
+        const found = findHeaderRowAndColumns(matrix, 100);
+        if (!found) {
+          return {
+            error:
+              'Não foi possível detectar colunas Computer Name e Status nas primeiras linhas. ' +
+              'Confira se existe uma linha de cabeçalho com esses títulos (mesmo após linhas em branco ou título do relatório).'
+          };
+        }
+        const dataRows = rowsFromMatrixByIndices(
+          matrix,
+          found.headerRowIndex + 1,
+          found.idxComputer,
+          found.idxStatus,
+          found.idxApproval,
+          sourceFileName || ''
+        );
+        if (!dataRows.length) {
+          return {
+            error:
+              'Cabeçalho encontrado na linha ' +
+              (found.headerRowIndex + 1) +
+              ', mas não há linhas de dados abaixo.'
+          };
+        }
+        return { rows: dataRows, found: found };
+      }
+
+      /** Atualiza o dashboard com linhas já unificadas (um ou vários arquivos). */
+      function applyDashboard(allRows, found, options) {
+        options = options || {};
+        const errEl = document.getElementById('parseError');
+        const batchEl = document.getElementById('batchStatus');
+        errEl.classList.remove('warning');
+        if (options.warningText) {
+          errEl.textContent = options.warningText;
+          errEl.style.display = 'block';
+          errEl.classList.add('warning');
+        } else {
+          errEl.style.display = 'none';
+          errEl.textContent = '';
+        }
+        if (options.batchLine) {
+          batchEl.textContent = options.batchLine;
+          batchEl.style.display = 'block';
+        } else {
+          batchEl.style.display = 'none';
+        }
+        const fileCount = options.fileCount || 1;
+        const agg = aggregate(allRows);
+        updateCards(agg, { fileCount: fileCount });
+        updateChart(agg.byStatus);
+        renderAttentionTable(
+          agg.attentionList,
+          agg.attentionByStatus,
+          found.labelComputer,
+          found.labelApproval,
+          found.labelStatus,
+          fileCount > 1
+        );
+      }
+
+      /**
+       * Escolhe a aba Sheet3 (qualquer capitalização) ou a primeira aba do livro Excel.
+       * @returns {{ sheetName: string, usedSheet3: boolean, allNames: string[] }}
+       */
+      function pickExcelSheet(wb) {
+        var names = wb.SheetNames || [];
+        if (!names.length) {
+          throw new Error('O arquivo não contém abas.');
+        }
+        var j;
+        for (j = 0; j < names.length; j++) {
+          if (String(names[j]).trim().toLowerCase() === 'sheet3') {
+            return { sheetName: names[j], usedSheet3: true, allNames: names.slice() };
+          }
+        }
+        return { sheetName: names[0], usedSheet3: false, allNames: names.slice() };
+      }
+
+      /** Lê um arquivo e devolve Promise; Excel (.xls/.xlsx) usa Sheet3 quando existir. */
+      function parseFileToMatrix(file) {
+        return new Promise(function (resolve) {
+          const nameLower = file.name.toLowerCase();
+          if (nameLower.endsWith('.xlsx') || nameLower.endsWith('.xls')) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              try {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                const pick = pickExcelSheet(wb);
+                const sheet = wb.Sheets[pick.sheetName];
+                if (!sheet) {
+                  resolve({ fileName: file.name, error: 'A aba selecionada não pôde ser lida.' });
+                  return;
+                }
+                const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                const res = extractDataFromMatrix(matrix, file.name);
+                if (res.error) {
+                  resolve({ fileName: file.name, error: res.error });
+                  return;
+                }
+                var out = { fileName: file.name, rows: res.rows, found: res.found };
+                if (!pick.usedSheet3) {
+                  out.sheetWarning =
+                    '"' +
+                    file.name +
+                    '": sem aba Sheet3; foi usada "' +
+                    pick.sheetName +
+                    '". Abas no arquivo: ' +
+                    pick.allNames.join(', ') +
+                    '.';
+                }
+                resolve(out);
+              } catch (ex) {
+                resolve({
+                  fileName: file.name,
+                  error:
+                    'Excel (.xls/.xlsx): ' +
+                    (ex.message || String(ex)) +
+                    ' — confirme se o arquivo não está corrompido ou protegido por senha.'
+                });
+              }
+            };
+            reader.onerror = function () {
+              resolve({ fileName: file.name, error: 'Falha ao ler o arquivo.' });
+            };
+            reader.readAsArrayBuffer(file);
+            return;
+          }
+          Papa.parse(file, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: function (results) {
+              if (results.errors && results.errors.length) {
+                resolve({ fileName: file.name, error: 'CSV: ' + results.errors[0].message });
+                return;
+              }
+              const res = extractDataFromMatrix(results.data, file.name);
+              if (res.error) resolve({ fileName: file.name, error: res.error });
+              else resolve({ fileName: file.name, rows: res.rows, found: res.found });
+            },
+            error: function (e) {
+              resolve({ fileName: file.name, error: e && e.message ? e.message : String(e) });
+            }
+          });
+        });
+      }
+
+      /** Processa 1 a MAX_FILES arquivos e consolida no mesmo gráfico/cards/tabela. */
+      function processFileList(fileList) {
+        const files = Array.from(fileList || []);
+        if (!files.length) return;
+
+        if (files.length > MAX_FILES) {
+          const errEl = document.getElementById('parseError');
+          errEl.classList.remove('warning');
+          errEl.textContent = 'Selecione no máximo ' + MAX_FILES + ' arquivos por vez.';
+          errEl.style.display = 'block';
+          document.getElementById('batchStatus').style.display = 'none';
+          return;
+        }
+
+        const batchEl = document.getElementById('batchStatus');
+        batchEl.textContent = 'Lendo ' + files.length + ' arquivo(s)…';
+        batchEl.style.display = 'block';
+
+        Promise.all(files.map(function (f) {
+          return parseFileToMatrix(f);
+        })).then(function (results) {
+          let allRows = [];
+          let firstFound = null;
+          const errors = [];
+
+          const sheetWarnings = [];
+          results.forEach(function (res, idx) {
+            if (res.error) {
+              errors.push((res.fileName || files[idx].name) + ': ' + res.error);
+            } else {
+              allRows = allRows.concat(res.rows);
+              if (!firstFound) firstFound = res.found;
+              if (res.sheetWarning) sheetWarnings.push(res.sheetWarning);
+            }
+          });
+
+          if (!allRows.length) {
+            batchEl.style.display = 'none';
+            const errEl = document.getElementById('parseError');
+            errEl.classList.remove('warning');
+            errEl.textContent = errors.length ? errors.join(' | ') : 'Nenhuma linha válida nos arquivos.';
+            errEl.style.display = 'block';
+            return;
+          }
+
+          const batchLine =
+            files.length +
+            ' arquivo(s) · ' +
+            allRows.length +
+            ' linha(s) no total' +
+            (errors.length ? ' (' + errors.length + ' arquivo(s) com erro)' : '');
+
+          let warnText = '';
+          if (errors.length) warnText += 'Aviso: ' + errors.join(' | ');
+          if (sheetWarnings.length) {
+            warnText +=
+              (warnText ? ' ' : '') +
+              'Aba Sheet3: ' +
+              sheetWarnings.join(' ');
+          }
+
+          applyDashboard(allRows, firstFound, {
+            fileCount: files.length,
+            warningText: warnText || null,
+            batchLine: batchLine
+          });
+        });
+      }
+
+      document.getElementById('fileInput').addEventListener('change', function (ev) {
+        const list = ev.target.files;
+        if (!list || !list.length) return;
+        processFileList(list);
+      });
+    })();
+  </script>
+</body>
+</html>
