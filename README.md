@@ -45,3 +45,5 @@ Apresentação: Utilize os gráficos e a tabela de pendências para demonstrar o
 
 🔒 Segurança e Privacidade
 Como o processamento é feito 100% no lado do cliente (browser), os dados sensíveis dos servidores e nomes de máquinas nunca saem da sua rede local ou estação de trabalho, atendendo aos requisitos de sigilo da auditoria de segurança.
+
+<img width="1792" height="839" alt="image" src="https://github.com/user-attachments/assets/2bbd8318-bb69-4578-b466-d3c591eb4638" />
